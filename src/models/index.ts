@@ -110,6 +110,58 @@ export interface ServiceHealth {
   active_severities: string[];
 }
 
+// ── Service Deep-Dive ────────────────────────────────────────────────────────
+
+export interface GraphNode {
+  id: string;
+  label: string;
+  type: 'source' | 'default';
+  data?: Record<string, unknown>;
+}
+
+export interface GraphEdge {
+  id: string;
+  source: string;
+  target: string;
+}
+
+export interface RootCauseAnalysis {
+  primary_issue: string;
+  confidence: number;
+  temporal_analysis: string;
+  cascade_analysis: string;
+  affected_dependencies: string[];
+}
+
+export interface DependencyGraph {
+  upstream: string[];
+  downstream: string[];
+  cascade_chain: string[];
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+}
+
+export interface TemporalCorrelations {
+  retry_storm_detected: boolean;
+  burst_patterns: unknown[];
+  correlated_services: string[];
+  anomaly_score: number;
+  service_spread: number;
+  incident_frequency: number;
+}
+
+export interface ServiceDeepDiveResponse {
+  service: string;
+  status: ServiceStatus;
+  health_score: number;
+  root_cause: RootCauseAnalysis;
+  recent_incidents: Incident[];
+  dependency_graph: DependencyGraph;
+  temporal_correlations: TemporalCorrelations;
+  ai_narrative: string;
+  recommended_actions: string[];
+}
+
 // ── Healing events ───────────────────────────────────────────────────────────
 
 export interface HealingEvent {

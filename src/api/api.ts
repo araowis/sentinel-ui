@@ -19,6 +19,7 @@
  * getLogs()               GET  /api/logs
  * getLogsByTrace()        GET  /api/logs/trace/{trace_id}
  * getServicesHealth()     GET  /api/services/health
+ * getServiceDeepDive()    GET  /api/services/{service_name}/deep-dive
  * getHealingEvents()      GET  /api/healing/events
  * triggerAction()         POST /api/actions/trigger
  * getEngineActions()      GET  /api/engine/actions
@@ -40,6 +41,7 @@ import type {
   IncidentFix,
   BackendLog,
   ServiceHealth,
+  ServiceDeepDiveResponse,
   HealingEvent,
   EngineAction,
   AuditEntry,
@@ -138,6 +140,17 @@ export async function getServicesHealth(windowMinutes = 30): Promise<{
   const { data } = await apiClient.get('/api/services/health', {
     params: { window_minutes: windowMinutes },
   });
+  return data;
+}
+
+export async function getServiceDeepDive(
+  serviceName: string,
+  windowMinutes = 30,
+): Promise<ServiceDeepDiveResponse> {
+  const { data } = await apiClient.get<ServiceDeepDiveResponse>(
+    `/api/services/${serviceName}/deep-dive`,
+    { params: { window_minutes: windowMinutes } },
+  );
   return data;
 }
 

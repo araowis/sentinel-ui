@@ -167,7 +167,7 @@ export const LiveTelemetry = ({
           value={stats.loading ? '—' : (s?.critical ?? 0)}
           subvalue={s ? `${s.high} high` : undefined}
           colorClass="text-red-500"
-        />
+        />  
         <StatCard
           label="Resolved Today"
           value={stats.loading ? '—' : (s?.resolved ?? 0)}

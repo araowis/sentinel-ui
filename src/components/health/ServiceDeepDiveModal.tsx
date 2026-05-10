@@ -5,7 +5,10 @@ import { motion } from 'motion/react';
 import { useApiCall } from '../../hooks/useApiCall';
 import { getServiceDeepDive } from '../../api/api';
 import type { ServiceDeepDiveResponse } from '../../models';
+import { createManualIncident } from '../../api/api';
 
+import { Github } from 'lucide-react';
+import { triggerAction } from '../../api/api';
 interface ServiceDeepDiveModalProps {
   serviceName: string | null;
   isOpen: boolean;
@@ -100,7 +103,7 @@ const ErrorLogsList = ({
   return (
     <div className="space-y-3">
       {logs.map((log) => (
-        <div key={log.error_type} className="flex justify-between items-center p-3 bg-[#060e20]/40 rounded border border-white/5">
+        <div key={`${log.error_type}-${log.last_seen}-${log.count}`} className="flex justify-between items-center p-3 bg-[#060e20]/40 rounded border border-white/5">
           <div>
             <p className="font-mono text-[11px] font-bold text-slate-200">{log.error_type}</p>
             {log.last_seen && (
@@ -402,6 +405,106 @@ export const ServiceDeepDiveModal: React.FC<ServiceDeepDiveModalProps> = ({
                 ))}
               </div>
             )}
+            {/* Incident Actions */}
+{data && (
+  <div className="bg-[#171f33]/70 backdrop-blur-xl rounded-xl p-6 border border-white/5">
+    <h3 className="text-xl font-bold text-slate-200 mb-4">
+      Incident Actions
+    </h3>
+
+    <div className="flex flex-wrap gap-4">
+
+      {/* Save Incident */}
+      <button
+        onClick={async () => {
+          try {
+
+            const response = await createManualIncident({
+              service: serviceName || 'unknown',
+              severity:
+                data.status === 'CRITICAL'
+                  ? 'CRITICAL'
+                  : data.status === 'DEGRADED'
+                  ? 'HIGH'
+                  : 'MEDIUM',
+
+              title:
+                data.root_cause?.primary_issue ||
+                'Manual Incident',
+
+              error_type:
+                data.recent_incidents?.[0]?.error_types?.[0] ||
+                'UNKNOWN'
+            });
+
+            alert(
+              `Incident created: ${response.incident_code}`
+            );
+
+          } catch (err) {
+            console.error(err);
+            alert('Failed to save incident');
+          }
+        }}
+        className="flex items-center gap-2 px-4 py-3 rounded-lg bg-cyan-500/10 border border-cyan-500/30 text-cyan-400 hover:bg-cyan-500/20 transition-all"
+      >
+        <AlertCircle size={18} />
+        Save Incident
+      </button>
+      {/* Create PR */}
+<button
+  onClick={async () => {
+    try {
+
+      await triggerAction({
+        incident_id: data.recent_incidents?.[0]?.id,
+        action_type: 'github.pull_request',
+        target_service: serviceName || '',
+        notes: 'AI-generated PR request',
+      });
+
+      alert('PR triggered');
+
+    } catch (err) {
+      console.error(err);
+      alert('Failed to create PR');
+    }
+  }}
+  className="flex items-center gap-2 px-4 py-3 rounded-lg bg-emerald-500/10 border border-emerald-500/30 text-emerald-400 hover:bg-emerald-500/20 transition-all"
+>
+  <Github size={18} />
+  Create PR
+</button>
+
+{/* Raise Issue */}
+<button
+  onClick={async () => {
+    try {
+
+      await triggerAction({
+        incident_id: data.recent_incidents?.[0]?.id,
+        action_type: 'github.issue',
+        target_service: serviceName || '',
+        notes: 'AI-generated GitHub issue',
+      });
+
+      alert('Issue created');
+
+    } catch (err) {
+      console.error(err);
+      alert('Failed to create issue');
+    }
+  }}
+  className="flex items-center gap-2 px-4 py-3 rounded-lg bg-amber-500/10 border border-amber-500/30 text-amber-400 hover:bg-amber-500/20 transition-all"
+>
+  <Github size={18} />
+  Raise Issue
+</button>
+
+    </div>
+  </div>
+)}
+            
           </div>
         </div>
       </motion.div>

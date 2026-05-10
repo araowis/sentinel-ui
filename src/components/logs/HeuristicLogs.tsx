@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef} from 'react';
 import { Search, Download, Brain, GitBranch, AlertCircle, AlertTriangle, Cpu } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { useApiCall } from '../../hooks/useApiCall';
@@ -17,6 +17,8 @@ export const HeuristicLogs = () => {
   const [levelFilter, setLevelFilter]     = useState('');
   const [traceInput, setTraceInput]       = useState('');
   const [traceSearch, setTraceSearch]     = useState('');
+
+  const hasLoadedOnce = useRef(false);
 
   // Main log stream
   const { data: logs, loading, error, refetch } = useApiCall<BackendLog[]>(
@@ -41,7 +43,21 @@ export const HeuristicLogs = () => {
   // Collect unique services for the filter dropdown
   const knownServices = Array.from(new Set((logs ?? []).map((l) => l.service))).sort();
 
+  useEffect(() => {
+    if (logs && logs.length > 0) {
+      hasLoadedOnce.current = true;
+    }
+  }, [logs]);
+
   const handleApplyFilters = () => refetch();
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      refetch();
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [refetch]);
 
   const handleLaunchExplorer = () => setTraceSearch(traceInput.trim());
 
@@ -94,7 +110,7 @@ export const HeuristicLogs = () => {
 
       <div className="flex-grow grid grid-cols-12 gap-0 overflow-hidden">
         {/* Main Terminal */}
-        <div className="col-span-12 lg:col-span-9 flex flex-col border-r border-white/10 bg-[#060e20]">
+        <div className="col-span-12 lg:col-span-9 flex flex-col min-h-0 border-r border-white/10 bg-[#060e20]">
           <div className="flex items-center justify-between px-4 py-2 bg-slate-900/50 border-b border-white/10">
             <span className="font-mono text-[10px] font-bold text-slate-500 uppercase tracking-widest">
               Stream Console
@@ -112,7 +128,7 @@ export const HeuristicLogs = () => {
           </div>
 
           <div className="flex-grow p-6 font-mono text-[13px] overflow-y-auto space-y-1">
-            {loading && (
+            {loading && !hasLoadedOnce.current && (
               <div className="space-y-2">
                 {Array.from({ length: 10 }).map((_, i) => (
                   <div key={i} className="h-5 bg-slate-800/40 rounded animate-pulse" />

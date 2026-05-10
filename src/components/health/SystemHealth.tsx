@@ -1,10 +1,11 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Globe, Activity } from 'lucide-react';
 import { cn } from '../../lib/utils';
 import { motion } from 'motion/react';
 import { useApiCall } from '../../hooks/useApiCall';
 import { getServicesHealth, getInfraMetrics, getInfraUptime } from '../../api/api';
 import type { ServiceHealth, MetricPoint } from '../../models';
+import { ServiceDeepDiveModal } from './ServiceDeepDiveModal';
 
 // ── Metric card ───────────────────────────────────────────────────────────────
 
@@ -97,6 +98,9 @@ const UptimeMatrix = ({ matrix }: { matrix: { uptime_pct: number; has_critical: 
 // ── Main component ────────────────────────────────────────────────────────────
 
 export const SystemHealth = () => {
+  const [selectedService, setSelectedService] = useState<string | null>(null);
+  const [showDeepDive, setShowDeepDive] = useState(false);
+
   const servicesState = useApiCall(() => getServicesHealth(60));
   const metricsState  = useApiCall(() => getInfraMetrics());
   const uptimeState   = useApiCall(() => getInfraUptime(30));
@@ -107,6 +111,16 @@ export const SystemHealth = () => {
 
   const stableCount   = services.filter((s) => s.status === 'STABLE').length;
   const degradedCount = services.filter((s) => s.status !== 'STABLE').length;
+
+  const handleServiceClick = (serviceName: string) => {
+    setSelectedService(serviceName);
+    setShowDeepDive(true);
+  };
+
+  const handleCloseDeepDive = () => {
+    setShowDeepDive(false);
+    setTimeout(() => setSelectedService(null), 300);
+  };
 
   return (
     <div className="space-y-6">
@@ -286,7 +300,8 @@ export const SystemHealth = () => {
                   : services.map((svc) => (
                       <tr
                         key={svc.service}
-                        className="border-b border-white/5 hover:bg-slate-800/20 transition-colors"
+                        className="border-b border-white/5 hover:bg-slate-800/20 transition-colors cursor-pointer"
+                        onClick={() => handleServiceClick(svc.service)}
                       >
                         <td
                           className={cn(
@@ -439,6 +454,13 @@ export const SystemHealth = () => {
           </p>
         </div>
       </div>
+
+      {/* Service Deep-Dive Modal */}
+      <ServiceDeepDiveModal
+        serviceName={selectedService}
+        isOpen={showDeepDive}
+        onClose={handleCloseDeepDive}
+      />
     </div>
   );
 };

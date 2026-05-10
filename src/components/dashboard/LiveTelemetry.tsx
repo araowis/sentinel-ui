@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ShoppingCart, CreditCard, Box, Bolt, Server, Activity, Cpu } from 'lucide-react';
 import { motion } from 'motion/react';
 import { cn } from '../../lib/utils';
@@ -6,6 +6,7 @@ import { useApiCall } from '../../hooks/useApiCall';
 import { getStats, getIncidents, getServicesHealth, getHealingEvents } from '../../api/api';
 import { sentinelWs } from '../../api/websocket';
 import type { Incident, ServiceHealth, Severity } from '../../models';
+import { ServiceDeepDiveModal } from '../health/ServiceDeepDiveModal';
 
 // ── Severity badge colours (maps backend CRITICAL/HIGH/MEDIUM/LOW) ────────────
 const severityClasses: Record<Severity, string> = {
@@ -54,15 +55,18 @@ const StatCard = ({
 
 const MicroserviceCard = ({
   service,
+  onClick,
 }: {
   service: ServiceHealth;
+  onClick: (serviceName: string) => void;
 }) => {
   const Icon = serviceIcon(service.service);
   const stable = service.status === 'STABLE';
   return (
     <div
+      onClick={() => onClick(service.service)}
       className={cn(
-        'bg-[#171f33]/70 backdrop-blur-xl p-4 rounded-xl flex items-center justify-between border-l-4',
+        'bg-[#171f33]/70 backdrop-blur-xl p-4 rounded-xl flex items-center justify-between border-l-4 cursor-pointer transition-all hover:shadow-lg hover:shadow-cyan-500/10',
         stable ? 'border-emerald-500' : service.status === 'CRITICAL' ? 'border-red-500' : 'border-amber-500',
       )}
     >
@@ -113,8 +117,17 @@ export const LiveTelemetry = ({
 }: {
   onSelectIncident: (id: string) => void;
 }) => {
+  const [selectedService, setSelectedService] = useState<string | null>(null);
+  const [showDeepDive, setShowDeepDive] = useState(false);
+  const [filterStatus, setFilterStatus] = useState<string>('');
+  const [filterSeverity, setFilterSeverity] = useState<string>('');
+
   const stats     = useApiCall(() => getStats());
-  const incidents = useApiCall(() => getIncidents({ limit: 20 }));
+  const incidents = useApiCall(() => getIncidents({
+    status: filterStatus || undefined,
+    severity: filterSeverity || undefined,
+    limit: 50,
+  }));
   const services  = useApiCall(() => getServicesHealth());
   const healing   = useApiCall(() => getHealingEvents({ limit: 6 }));
 
@@ -124,6 +137,16 @@ export const LiveTelemetry = ({
     sentinelWs.on('incident_update', handler);
     return () => sentinelWs.off('incident_update', handler);
   }, [incidents.refetch]);
+
+  const handleServiceClick = (serviceName: string) => {
+    setSelectedService(serviceName);
+    setShowDeepDive(true);
+  };
+
+  const handleCloseDeepDive = () => {
+    setShowDeepDive(false);
+    setTimeout(() => setSelectedService(null), 300);
+  };
 
   const s = stats.data;
   const incidentList: Incident[] = incidents.data?.incidents ?? [];
@@ -176,7 +199,11 @@ export const LiveTelemetry = ({
         {serviceList.length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
             {serviceList.slice(0, 6).map((svc) => (
-              <MicroserviceCard key={svc.service} service={svc} />
+              <MicroserviceCard
+                key={svc.service}
+                service={svc}
+                onClick={handleServiceClick}
+              />
             ))}
           </div>
         ) : !services.loading ? (
@@ -213,14 +240,57 @@ export const LiveTelemetry = ({
             </div>
           </div>
 
+          {/* Filters */}
+          <div className="px-6 py-4 border-b border-white/5 bg-slate-800/20 flex gap-4 items-center flex-wrap">
+            <div className="flex items-center gap-2">
+              <label className="font-mono text-[10px] text-slate-500 uppercase tracking-widest">Status:</label>
+              <select
+                value={filterStatus}
+                onChange={(e) => setFilterStatus(e.target.value)}
+                className="bg-slate-700/50 border border-white/10 rounded px-3 py-1.5 text-[11px] text-slate-200 font-mono hover:border-cyan-500/50 transition-colors"
+              >
+                <option value="">All</option>
+                <option value="OPEN">Open</option>
+                <option value="IN_PROGRESS">In Progress</option>
+                <option value="RESOLVED">Resolved</option>
+              </select>
+            </div>
+            <div className="flex items-center gap-2">
+              <label className="font-mono text-[10px] text-slate-500 uppercase tracking-widest">Severity:</label>
+              <select
+                value={filterSeverity}
+                onChange={(e) => setFilterSeverity(e.target.value)}
+                className="bg-slate-700/50 border border-white/10 rounded px-3 py-1.5 text-[11px] text-slate-200 font-mono hover:border-cyan-500/50 transition-colors"
+              >
+                <option value="">All</option>
+                <option value="CRITICAL">Critical</option>
+                <option value="HIGH">High</option>
+                <option value="MEDIUM">Medium</option>
+                <option value="LOW">Low</option>
+              </select>
+            </div>
+            {(filterStatus || filterSeverity) && (
+              <button
+                onClick={() => {
+                  setFilterStatus('');
+                  setFilterSeverity('');
+                }}
+                className="ml-auto text-[11px] font-mono text-slate-400 hover:text-cyan-400 transition-colors"
+              >
+                Clear Filters
+              </button>
+            )}
+          </div>
+
           {incidents.error && (
             <div className="px-6 py-3 bg-red-500/10 text-red-400 font-mono text-xs border-b border-red-500/20">
               {incidents.error}
             </div>
           )}
 
-          <div className="overflow-x-auto">
-            <table className="w-full text-left border-collapse">
+          <div className="flex-1 overflow-y-auto">
+            <div className="overflow-x-auto h-full">
+              <table className="w-full text-left border-collapse">
               <thead>
                 <tr className="bg-slate-800/20 border-b border-white/5">
                   {['Incident ID', 'Timestamp', 'Service', 'Severity', 'Status'].map((h) => (
@@ -288,6 +358,7 @@ export const LiveTelemetry = ({
                 )}
               </tbody>
             </table>
+            </div>
           </div>
         </div>
 
@@ -410,6 +481,13 @@ export const LiveTelemetry = ({
           </div>
         </div>
       </div>
+
+      {/* Service Deep-Dive Modal */}
+      <ServiceDeepDiveModal
+        serviceName={selectedService}
+        isOpen={showDeepDive}
+        onClose={handleCloseDeepDive}
+      />
     </div>
   );
 };

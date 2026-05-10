@@ -1,97 +1,217 @@
-import axios from 'axios';
+/**
+ * Sentinel API — all backend calls in one place.
+ *
+ * Every function is async/await and throws on failure (the axios client
+ * interceptor converts HTTP errors to plain Error objects with readable
+ * messages, so callers just need try/catch or the useApiCall hook).
+ *
+ * Endpoint → backend route mapping
+ * ─────────────────────────────────
+ * getStats()              GET  /api/stats/enhanced
+ * getIncidents()          GET  /api/incidents
+ * getIncidentDetail()     GET  /api/incidents/{id}
+ * triggerRca()            POST /api/incidents/{id}/rca
+ * getRca()                GET  /api/incidents/{id}/rca
+ * getRcaHistory()         GET  /api/incidents/{id}/rca/history
+ * getFix()                GET  /api/incidents/{id}/fix
+ * triggerFix()            POST /api/incidents/{id}/fix
+ * resolveIncident()       PATCH /api/incidents/{id}/resolve
+ * getLogs()               GET  /api/logs
+ * getLogsByTrace()        GET  /api/logs/trace/{trace_id}
+ * getServicesHealth()     GET  /api/services/health
+ * getHealingEvents()      GET  /api/healing/events
+ * triggerAction()         POST /api/actions/trigger
+ * getEngineActions()      GET  /api/engine/actions
+ * getEngineAudit()        GET  /api/engine/audit
+ * getEngineMode()         GET  /api/engine/mode
+ * setEngineMode()         PATCH /api/engine/mode
+ * getInfraTopology()      GET  /api/infra/topology
+ * getInfraMetrics()       GET  /api/infra/metrics
+ * getInfraUptime()        GET  /api/infra/uptime
+ * getHealth()             GET  /api/health
+ */
+
+import { apiClient } from './client';
 import type {
+  StatsResponse,
   Incident,
-  Microservice,
+  IncidentDetail,
+  RcaResult,
+  IncidentFix,
+  BackendLog,
+  ServiceHealth,
   HealingEvent,
-  SystemLog,
-  Action,
-  AuditLogEntry,
-  SystemHealthMetrics,
+  EngineAction,
+  AuditEntry,
+  EngineMode,
+  InfraTopology,
+  InfraMetrics,
+  InfraUptime,
+  TriggerActionRequest,
 } from '../models';
 
-// Base API configuration
-const API_BASE_URL =
-  import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080/api/v1';
+// ── Dashboard stats ──────────────────────────────────────────────────────────
 
-const apiClient = axios.create({
-  baseURL: API_BASE_URL,
-  headers: {
-    'Content-Type': 'application/json',
-  },
-});
+export async function getStats(): Promise<StatsResponse> {
+  const { data } = await apiClient.get<StatsResponse>('/api/stats/enhanced');
+  return data;
+}
 
-export const sentinelApi = {
-  // Telemetry & Stats
-  getGlobalStats: async () => {
-    const { data } = await apiClient.get('/stats/summary');
-    return data;
-  },
+// ── Incidents ────────────────────────────────────────────────────────────────
 
-  getSystemHealth: async (): Promise<SystemHealthMetrics> => {
-    const { data } = await apiClient.get('/health/metrics');
-    return data;
-  },
+export async function getIncidents(params?: {
+  status?: string;
+  severity?: string;
+  limit?: number;
+  offset?: number;
+}): Promise<{ incidents: Incident[]; count: number }> {
+  const { data } = await apiClient.get('/api/incidents', { params });
+  return data;
+}
 
-  // Incidents
-  getIncidents: async (status?: string): Promise<Incident[]> => {
-    const { data } = await apiClient.get('/incidents', {
-      params: { status },
-    });
-    return data;
-  },
+export async function getIncidentDetail(id: string): Promise<IncidentDetail> {
+  const { data } = await apiClient.get<IncidentDetail>(`/api/incidents/${id}`);
+  return data;
+}
 
-  getIncidentDetails: async (id: string): Promise<Incident> => {
-    const { data } = await apiClient.get(`/incidents/${id}`);
-    return data;
-  },
+export async function resolveIncident(id: string): Promise<void> {
+  await apiClient.patch(`/api/incidents/${id}/resolve`);
+}
 
-  resolveIncident: async (id: string) => {
-    const { data } = await apiClient.post(`/incidents/${id}/resolve`);
-    return data;
-  },
+// ── RCA ──────────────────────────────────────────────────────────────────────
 
-  // Microservices
-  getMicroservices: async (): Promise<Microservice[]> => {
-    const { data } = await apiClient.get('/services');
-    return data;
-  },
+export async function getRca(id: string): Promise<{ incident_id: string; rca: RcaResult }> {
+  const { data } = await apiClient.get(`/api/incidents/${id}/rca`);
+  return data;
+}
 
-  // Logs
-  getLogs: async (
-    params?: {
-      service?: string;
-      level?: string;
-      limit?: number;
-    }
-  ): Promise<SystemLog[]> => {
-    const { data } = await apiClient.get('/logs', { params });
-    return data;
-  },
+export async function triggerRca(id: string): Promise<{ incident_id: string; rca: RcaResult }> {
+  const { data } = await apiClient.post(`/api/incidents/${id}/rca`);
+  return data;
+}
 
-  // Healing & Actions
-  getHealingEvents: async (): Promise<HealingEvent[]> => {
-    const { data } = await apiClient.get('/healing/history');
-    return data;
-  },
+export async function getRcaHistory(id: string): Promise<{
+  incident_id: string;
+  total_runs: number;
+  rca_history: RcaResult[];
+}> {
+  const { data } = await apiClient.get(`/api/incidents/${id}/rca/history`);
+  return data;
+}
 
-  getActions: async (): Promise<Action[]> => {
-    const { data } = await apiClient.get('/actions');
-    return data;
-  },
+// ── Fix / remediation ────────────────────────────────────────────────────────
 
-  triggerAction: async (
-    actionId: string,
-    incidentId?: string
-  ) => {
-    const { data } = await apiClient.post(
-      `/actions/${actionId}/execute`,
-      { incidentId }
-    );
-    return data;
-  },
+export async function getFix(id: string): Promise<{ incident_id: string; fix: IncidentFix }> {
+  const { data } = await apiClient.get(`/api/incidents/${id}/fix`);
+  return data;
+}
 
-  getAuditLogs: async (): Promise<AuditLogEntry[]> => {
-    const { data } = await apiClient.get('/audit');
-    return data;
-  },
-};
+export async function triggerFix(id: string): Promise<{ incident_id: string; fix: IncidentFix }> {
+  const { data } = await apiClient.post(`/api/incidents/${id}/fix`);
+  return data;
+}
+
+// ── Logs ─────────────────────────────────────────────────────────────────────
+
+export async function getLogs(params?: {
+  service?: string;
+  level?: string;
+  limit?: number;
+}): Promise<BackendLog[]> {
+  const { data } = await apiClient.get<BackendLog[]>('/api/logs', { params });
+  return data;
+}
+
+export async function getLogsByTrace(
+  traceId: string,
+): Promise<{ trace_id: string; logs: BackendLog[]; count: number }> {
+  const { data } = await apiClient.get(`/api/logs/trace/${traceId}`);
+  return data;
+}
+
+// ── Services health ──────────────────────────────────────────────────────────
+
+export async function getServicesHealth(windowMinutes = 30): Promise<{
+  services: ServiceHealth[];
+  window_minutes: number;
+}> {
+  const { data } = await apiClient.get('/api/services/health', {
+    params: { window_minutes: windowMinutes },
+  });
+  return data;
+}
+
+// ── Healing events ───────────────────────────────────────────────────────────
+
+export async function getHealingEvents(params?: {
+  incident_id?: string;
+  limit?: number;
+}): Promise<{ events: HealingEvent[]; count: number }> {
+  const { data } = await apiClient.get('/api/healing/events', { params });
+  return data;
+}
+
+// ── Manual action trigger ────────────────────────────────────────────────────
+
+export async function triggerAction(body: TriggerActionRequest): Promise<{
+  created: boolean;
+  id: string;
+  incident_id: string;
+  action_type: string;
+  status: string;
+  triggered_at: string;
+}> {
+  const { data } = await apiClient.post('/api/actions/trigger', body);
+  return data;
+}
+
+// ── Engine (actions + audit + mode) ─────────────────────────────────────────
+
+export async function getEngineActions(): Promise<{ actions: EngineAction[] }> {
+  const { data } = await apiClient.get('/api/engine/actions');
+  return data;
+}
+
+export async function getEngineAudit(params?: {
+  action_type?: string;
+  status?: string;
+  limit?: number;
+  offset?: number;
+}): Promise<{ audit: AuditEntry[]; count: number; total: number }> {
+  const { data } = await apiClient.get('/api/engine/audit', { params });
+  return data;
+}
+
+export async function getEngineMode(): Promise<EngineMode> {
+  const { data } = await apiClient.get<EngineMode>('/api/engine/mode');
+  return data;
+}
+
+export async function setEngineMode(mode: 'autonomous' | 'human_in_the_loop'): Promise<EngineMode> {
+  const { data } = await apiClient.patch<EngineMode>('/api/engine/mode', { mode });
+  return data;
+}
+
+// ── Infrastructure ───────────────────────────────────────────────────────────
+
+export async function getInfraTopology(): Promise<InfraTopology> {
+  const { data } = await apiClient.get<InfraTopology>('/api/infra/topology');
+  return data;
+}
+
+export async function getInfraMetrics(): Promise<InfraMetrics> {
+  const { data } = await apiClient.get<InfraMetrics>('/api/infra/metrics');
+  return data;
+}
+
+export async function getInfraUptime(days = 30): Promise<InfraUptime> {
+  const { data } = await apiClient.get<InfraUptime>('/api/infra/uptime', { params: { days } });
+  return data;
+}
+
+// ── Health check ─────────────────────────────────────────────────────────────
+
+export async function getHealth(): Promise<{ status: string; service: string }> {
+  const { data } = await apiClient.get('/api/health');
+  return data;
+}

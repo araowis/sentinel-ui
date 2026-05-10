@@ -1,21 +1,208 @@
-export enum Severity {
-  CRITICAL = 'CRITICAL',
-  WARNING = 'WARNING',
-  SUCCESS = 'SUCCESS',
-  INFO = 'INFO',
-}
+/**
+ * TypeScript types that mirror the Sentinel FastAPI backend responses.
+ * All field names are snake_case to match JSON returned by the API.
+ */
+
+// ── Incidents ────────────────────────────────────────────────────────────────
+
+export type Severity = 'CRITICAL' | 'HIGH' | 'MEDIUM' | 'LOW';
+export type IncidentStatus = 'OPEN' | 'IN_PROGRESS' | 'RESOLVED';
 
 export interface Incident {
-  id: string;
-  timestamp: string;
-  service: string;
-  errorType: string;
+  id: string;                 // UUID — used for all API calls
+  incident_code: string;      // e.g. INC-2025-001 — displayed in UI
+  trace_id: string;
+  primary_service: string;
   severity: Severity;
-  status: string;
-  description?: string;
-  impactScore?: number;
-  confidence?: number;
+  status: IncidentStatus;
+  detected_at: string;        // ISO timestamp
+  resolved_at: string | null;
+  raw_log_count: number;
+  affected_source: string | null;
+  error_types: string[];      // e.g. ["GATEWAY_TIMEOUT", "NEGATIVE_STOCK"]
+  latest_rca?: RcaResult | null;
 }
+
+export interface IncidentDetail extends Incident {
+  logs: IncidentLog[];
+}
+
+// ── RCA ──────────────────────────────────────────────────────────────────────
+
+export interface RcaResult {
+  id: string;
+  incident_id: string;
+  root_cause: string;
+  impact: string;
+  confidence: number;          // 0–100
+  recommended_fix: string;
+  severity: string;
+  blast_radius: string;
+  affected_service: string;
+  github_pr_description: string | null;
+  health_snapshot: unknown;
+  generated_at: string;
+  model_used: string;
+}
+
+// ── Fix / remediation ────────────────────────────────────────────────────────
+
+export interface IncidentFix {
+  id: string;
+  incident_id: string;
+  action_type: string;         // "github.pull_request" | "github.issue" | "slack.message"
+  status: string;
+  detail: unknown;
+  triggered_at: string;
+}
+
+// ── Logs ─────────────────────────────────────────────────────────────────────
+
+export interface IncidentLog {
+  trace_id: string;
+  service: string;
+  error_type: string;
+  message: string;
+  level: 'INFO' | 'WARN' | 'ERROR' | 'DEBUG';
+  class_name: string | null;
+  timestamp: string;
+}
+
+export interface BackendLog {
+  id: string;
+  trace_id: string;
+  service: string;
+  error_type: string | null;
+  message: string;
+  level: string;
+  thread: string | null;
+  class_name: string | null;
+  timestamp: string;
+  processed: boolean;
+  dedup_key: string;
+}
+
+// ── Dashboard stats ──────────────────────────────────────────────────────────
+
+export interface StatsResponse {
+  total: number;
+  open: number;
+  in_progress: number;
+  resolved: number;
+  critical: number;
+  high: number;
+  resolution_rate: number;     // 0–100 %
+  avg_confidence: number | null;
+  mttr_minutes: number | null;
+}
+
+// ── Services health ──────────────────────────────────────────────────────────
+
+export type ServiceStatus = 'STABLE' | 'DEGRADED' | 'CRITICAL';
+
+export interface ServiceHealth {
+  service: string;
+  status: ServiceStatus;
+  error_rate_pct: number;
+  open_incidents: number;
+  total_logs: number;
+  last_seen: string | null;
+  active_severities: string[];
+}
+
+// ── Healing events ───────────────────────────────────────────────────────────
+
+export interface HealingEvent {
+  id: string;
+  incident_id: string;
+  incident_code: string | null;
+  action_type: string;
+  status: string;
+  triggered_at: string;
+  detail: unknown;
+}
+
+// ── Engine ───────────────────────────────────────────────────────────────────
+
+export interface EngineAction {
+  name: string;
+  description: string;
+  category: string;
+  enabled: boolean;
+  total_runs: number;
+  success_rate: number | null;
+  last_run: string | null;
+}
+
+export interface AuditEntry {
+  id: string;
+  incident_id: string;
+  incident_code: string | null;
+  primary_service: string | null;
+  action_type: string;
+  status: string;
+  triggered_at: string;
+  detail: unknown;
+}
+
+export interface EngineMode {
+  engine_mode: 'autonomous' | 'human_in_the_loop';
+  updated_at: string | null;
+}
+
+// ── Infrastructure ───────────────────────────────────────────────────────────
+
+export interface RegionNode {
+  region: string;
+  label: string;
+  lat: number;
+  lng: number;
+  status: string;
+}
+
+export interface InfraTopology {
+  regions: RegionNode[];
+  open_incidents: Record<string, number>;
+  inter_region_latency_ms: Record<string, number>;
+}
+
+export interface MetricPoint {
+  timestamp: number;
+  value: number;
+}
+
+export interface InfraMetrics {
+  cpu: { unit: string; series: MetricPoint[] };
+  memory: { unit: string; used: number; total: number; series: MetricPoint[] };
+  disk_io: { unit: string; read: MetricPoint[]; write: MetricPoint[] };
+  generated_at: string;
+}
+
+export interface UptimeDay {
+  date: string;
+  uptime_pct: number;
+  incident_count: number;
+  has_critical: boolean;
+  last_remediation: string | null;
+}
+
+export interface InfraUptime {
+  days: number;
+  avg_uptime: number;
+  matrix: UptimeDay[];
+}
+
+// ── Trigger action request ───────────────────────────────────────────────────
+
+export interface TriggerActionRequest {
+  incident_id: string;
+  action_type: string;
+  target_service: string;
+  cluster_id?: string;
+  notes?: string;
+}
+
+// ── Microservice (legacy — kept for mock-data backward compat) ───────────────
 
 export interface Microservice {
   name: string;
@@ -23,49 +210,4 @@ export interface Microservice {
   type: string;
   latency?: string;
   errorRate?: string;
-}
-
-export interface HealingEvent {
-  id: string;
-  action: string;
-  timestamp: string;
-  status: 'SUCCESSFUL' | 'IN_PROGRESS' | 'FAILED' | 'PENDING';
-  type: 'AUTOMATED ACTION' | 'AI RECOMMENDATION';
-}
-
-export interface SystemLog {
-  timestamp: string;
-  level: 'INFO' | 'WARN' | 'CRIT' | 'AI';
-  service: string;
-  message: string;
-  isAnomaly?: boolean;
-}
-
-export interface Action {
-  id: string;
-  name: string;
-  description: string;
-  enabled: boolean;
-  successRate: number;
-  lastRun: string;
-  icon: string;
-}
-
-export interface AuditLogEntry {
-  timestamp: string;
-  incidentId: string;
-  action: string;
-  outcome: 'Success' | 'Failed' | 'Pending';
-  validation: string;
-}
-
-export interface SystemHealthMetrics {
-  cpuLoad: number;
-  memoryUsage: {
-    used: number;
-    total: number;
-  };
-  diskIo: number;
-  gatewayLoad: number;
-  latency: number;
 }

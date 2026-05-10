@@ -11,9 +11,9 @@ import { ServiceDeepDiveModal } from '../health/ServiceDeepDiveModal';
 // ── Severity badge colours (maps backend CRITICAL/HIGH/MEDIUM/LOW) ────────────
 const severityClasses: Record<Severity, string> = {
   CRITICAL: 'bg-red-500/10 text-red-500 border-red-500/20',
-  HIGH:     'bg-orange-500/10 text-orange-400 border-orange-500/20',
-  MEDIUM:   'bg-amber-500/10 text-amber-500 border-amber-500/20',
-  LOW:      'bg-slate-500/10 text-slate-400 border-slate-500/20',
+  HIGH: 'bg-orange-500/10 text-orange-400 border-orange-500/20',
+  MEDIUM: 'bg-amber-500/10 text-amber-500 border-amber-500/20',
+  LOW: 'bg-slate-500/10 text-slate-400 border-slate-500/20',
 };
 
 const SERVICE_ICONS: Record<string, React.ComponentType<{ size?: number }>> = {
@@ -28,6 +28,43 @@ function serviceIcon(name: string): React.ComponentType<{ size?: number }> {
   if (lower.includes('inventory') || lower.includes('stock')) return Box;
   return SERVICE_ICONS.default;
 }
+
+const exportIncidentsToCSV = (rows: any[], filename = "incidents.csv") => {
+  if (!rows?.length) return;
+
+  // Collect all unique keys
+  const headers = Array.from(
+    new Set(rows.flatMap((row) => Object.keys(row)))
+  );
+
+  // Convert rows to CSV
+  const csv = [
+    headers.join(","),
+    ...rows.map((row) =>
+      headers
+        .map((header) => {
+          const value = row[header];
+          // Handle null/undefined
+          if (value === null || value === undefined) return "";
+          // Escape quotes
+          const escaped = String(value).replace(/"/g, '""');
+          return `"${escaped}"`;
+        })
+        .join(",")
+    ),
+  ].join("\n");
+
+  // Create download
+  const blob = new Blob([csv], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.setAttribute("download", filename);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  URL.revokeObjectURL(url);
+};
 
 // ── Sub-components ────────────────────────────────────────────────────────────
 
@@ -48,8 +85,11 @@ const StatCard = ({
     </span>
     <div className="mt-2 flex items-baseline gap-2">
       <span className={cn('text-5xl font-bold tracking-tight', colorClass)}>{value}</span>
-      {subvalue && <span className="font-mono text-[13px] text-emerald-400">{subvalue}</span>}
-    </div>
+{subvalue && (
+  <span className="font-mono text-[13px] text-emerald-400">
+    {subvalue}
+  </span>
+)}    </div>
   </div>
 );
 
@@ -77,8 +117,8 @@ const MicroserviceCard = ({
             stable
               ? 'bg-emerald-500/10 text-emerald-400'
               : service.status === 'CRITICAL'
-              ? 'bg-red-500/10 text-red-500'
-              : 'bg-amber-500/10 text-amber-400',
+                ? 'bg-red-500/10 text-red-500'
+                : 'bg-amber-500/10 text-amber-400',
           )}
         >
           <Icon size={20} />
@@ -122,14 +162,14 @@ export const LiveTelemetry = ({
   const [filterStatus, setFilterStatus] = useState<string>('');
   const [filterSeverity, setFilterSeverity] = useState<string>('');
 
-  const stats     = useApiCall(() => getStats());
+  const stats = useApiCall(() => getStats());
   const incidents = useApiCall(() => getIncidents({
     status: filterStatus || undefined,
     severity: filterSeverity || undefined,
     limit: 50,
   }));
-  const services  = useApiCall(() => getServicesHealth());
-  const healing   = useApiCall(() => getHealingEvents({ limit: 6 }));
+  const services = useApiCall(() => getServicesHealth());
+  const healing = useApiCall(() => getHealingEvents({ limit: 6 }));
 
   // Refresh incident list when the WebSocket notifies us of new incidents
   useEffect(() => {
@@ -167,7 +207,7 @@ export const LiveTelemetry = ({
           value={stats.loading ? '—' : (s?.critical ?? 0)}
           subvalue={s ? `${s.high} high` : undefined}
           colorClass="text-red-500"
-        />  
+        />
         <StatCard
           label="Resolved Today"
           value={stats.loading ? '—' : (s?.resolved ?? 0)}
@@ -180,8 +220,8 @@ export const LiveTelemetry = ({
             stats.loading
               ? '—'
               : s?.avg_confidence != null
-              ? `${s.avg_confidence.toFixed(0)}%`
-              : 'N/A'
+                ? `${s.avg_confidence.toFixed(0)}%`
+                : 'N/A'
           }
           subvalue="RCA average"
           colorClass="text-amber-400"
@@ -228,7 +268,9 @@ export const LiveTelemetry = ({
           <div className="px-6 py-4 border-b border-white/5 flex justify-between items-center bg-slate-800/30">
             <h3 className="text-xl font-bold text-slate-200">Active Incident Stream</h3>
             <div className="flex gap-2">
-              <button className="bg-slate-700/50 px-3 py-1.5 rounded border border-white/5 text-[11px] font-mono font-bold text-slate-400 hover:text-cyan-400 transition-colors">
+              <button 
+              onClick={() => exportIncidentsToCSV(incidentList)}
+              className="bg-slate-700/50 px-3 py-1.5 rounded border border-white/5 text-[11px] font-mono font-bold text-slate-400 hover:text-cyan-400 transition-colors">
                 EXPORT
               </button>
               <button
@@ -291,24 +333,24 @@ export const LiveTelemetry = ({
           <div className="flex-1 overflow-y-auto">
             <div className="overflow-x-auto h-full">
               <table className="w-full text-left border-collapse">
-              <thead>
-                <tr className="bg-slate-800/20 border-b border-white/5">
-                  {['Incident ID', 'Timestamp', 'Service', 'Severity', 'Status'].map((h) => (
-                    <th
-                      key={h}
-                      className={cn(
-                        'px-6 py-3 font-mono text-[11px] font-bold text-slate-500 uppercase tracking-widest',
-                        h === 'Status' && 'text-right',
-                      )}
-                    >
-                      {h}
-                    </th>
-                  ))}
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-white/5">
-                {incidents.loading
-                  ? Array.from({ length: 4 }).map((_, i) => (
+                <thead>
+                  <tr className="bg-slate-800/20 border-b border-white/5">
+                    {['Incident ID', 'Timestamp', 'Service', 'Severity', 'Status'].map((h) => (
+                      <th
+                        key={h}
+                        className={cn(
+                          'px-6 py-3 font-mono text-[11px] font-bold text-slate-500 uppercase tracking-widest',
+                          h === 'Status' && 'text-right',
+                        )}
+                      >
+                        {h}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-white/5">
+                  {incidents.loading
+                    ? Array.from({ length: 4 }).map((_, i) => (
                       <tr key={i} className="animate-pulse">
                         {Array.from({ length: 5 }).map((_, j) => (
                           <td key={j} className="px-6 py-4">
@@ -317,7 +359,7 @@ export const LiveTelemetry = ({
                         ))}
                       </tr>
                     ))
-                  : incidentList.map((incident) => (
+                    : incidentList.map((incident) => (
                       <tr
                         key={incident.id}
                         className="hover:bg-cyan-500/5 transition-colors group cursor-pointer"
@@ -349,15 +391,15 @@ export const LiveTelemetry = ({
                         </td>
                       </tr>
                     ))}
-                {!incidents.loading && incidentList.length === 0 && (
-                  <tr>
-                    <td colSpan={5} className="px-6 py-8 text-center text-slate-500 font-mono text-sm">
-                      No incidents found
-                    </td>
-                  </tr>
-                )}
-              </tbody>
-            </table>
+                  {!incidents.loading && incidentList.length === 0 && (
+                    <tr>
+                      <td colSpan={5} className="px-6 py-8 text-center text-slate-500 font-mono text-sm">
+                        No incidents found
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
             </div>
           </div>
         </div>
@@ -491,3 +533,4 @@ export const LiveTelemetry = ({
     </div>
   );
 };
+ 

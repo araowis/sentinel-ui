@@ -159,6 +159,9 @@ export async function triggerAction(body: TriggerActionRequest): Promise<{
   incident_id: string;
   action_type: string;
   status: string;
+  target_service: string;
+  cluster_id?: string;
+  notes?: string;
   triggered_at: string;
 }> {
   const { data } = await apiClient.post('/api/actions/trigger', body);

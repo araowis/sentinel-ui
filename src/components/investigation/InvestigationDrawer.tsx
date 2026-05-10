@@ -101,10 +101,16 @@ export const InvestigationDrawer = ({
   const [resolving, setResolving]   = useState(false);
   const [actionMsg, setActionMsg]   = useState<string | null>(null);
 
-  const { data: incident, loading, error, refetch } = useApiCall<IncidentDetail>(
-    () => getIncidentDetail(incidentId!),
-    [incidentId],
-  );
+const { data: incident, loading, error, refetch } = useApiCall<IncidentDetail>(
+  () => {
+    if (!incidentId) {
+      return Promise.reject(new Error("No incident selected"));
+    }
+
+    return getIncidentDetail(incidentId);
+  },
+  [incidentId],
+);
 
   if (!incidentId) return null;
 
